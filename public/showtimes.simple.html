@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Showtimes - MovieHub</title>
+  <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+  <header>
+    <div class="container">
+      <h1>🎬 MovieHub</h1>
+      <nav id="headerNav">
+        <a href="/">Home</a>
+      </nav>
+    </div>
+  </header>
+
+  <section class="movies-section">
+    <div class="container">
+      <h2 id="movieTitle">Select Showtime</h2>
+      <div class="loading">Loading showtimes...</div>
+      <div id="showsList"></div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="container">
+      <p>&copy; 2025 MovieHub. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <script src="/js/app.simple.js"></script>
+  <script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const movieId = urlParams.get('movie');
+
+    if (!movieId) {
+      window.location.href = '/';
+    }
+
+    // Update header
+    const nav = document.getElementById('headerNav');
+    const user = Auth.getUser();
+    if (user) {
+      nav.innerHTML = `
+        <a href="/">Home</a>
+        <a href="/my-bookings.simple.html">My Bookings</a>
+        <a href="#" onclick="Auth.logout(); return false;">Logout (${user.name})</a>
+      `;
+    }
+
+    async function loadShowtimes() {
+      try {
+        const { shows } = await API.get(`/shows/movie/${movieId}`);
+        const loading = document.querySelector('.loading');
+        const showsList = document.getElementById('showsList');
+
+        loading.style.display = 'none';
+
+        if (shows.length === 0) {
+          showsList.innerHTML = '<p class="text-center">No showtimes available for this movie</p>';
+          return;
+        }
+
+        // Update movie title
+        document.getElementById('movieTitle').textContent = `${shows[0].movieId.title} - Select Showtime`;
+
+        showsList.innerHTML = '<div class="shows-list">' + shows.map(show => {
+          const availableSeats = show.totalSeats - show.bookedSeats.length;
+          return `
+            <div class="show-item" ${availableSeats > 0 ? `onclick="window.location.href='/seats.simple.html?show=${show._id}'"` : ''}>
+              <div class="show-info">
+                <h4>${show.theatreId.name}</h4>
+                <p>${show.theatreId.location}</p>
+                <p>${formatDate(show.showTime)}</p>
+                <p><strong>${availableSeats}/${show.totalSeats}</strong> seats available</p>
+              </div>
+              <div>
+                <div class="show-price">${formatCurrency(show.price)}</div>
+                ${availableSeats > 0 ? '<a href="#" class="btn btn-secondary">Book Now</a>' : '<p style="color: #e74c3c; font-weight: bold;">SOLD OUT</p>'}
+              </div>
+            </div>
+          `;
+        }).join('') + '</div>';
+      } catch (error) {
+        document.querySelector('.loading').textContent = 'Failed to load showtimes';
+      }
+    }
+
+    loadShowtimes();
+  </script>
+</body>
+</html>

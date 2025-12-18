@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment - TicketHub</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <div class="nav-brand">
+                <h1><a href="/">🎬 TicketHub</a></h1>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container" style="padding: 2rem 0; max-width: 600px;">
+        <div class="auth-card" style="max-width: 100%;">
+            <h2>Complete Payment</h2>
+            
+            <div id="bookingDetails" style="margin: 1.5rem 0; padding: 1rem; background: rgba(255,255,255,0.05); border-radius: 8px;">
+                <div class="loading">Loading booking details...</div>
+            </div>
+            
+            <div id="paymentSection" style="display: none;">
+                <h3 style="margin-bottom: 1rem;">Select Payment Method</h3>
+                
+                <div class="payment-methods">
+                    <div class="payment-method active" data-method="card" onclick="selectPayment('card')">
+                        <div class="icon">💳</div>
+                        <div>Card</div>
+                    </div>
+                    <div class="payment-method" data-method="upi" onclick="selectPayment('upi')">
+                        <div class="icon">📱</div>
+                        <div>UPI</div>
+                    </div>
+                    <div class="payment-method" data-method="netbanking" onclick="selectPayment('netbanking')">
+                        <div class="icon">🏦</div>
+                        <div>Net Banking</div>
+                    </div>
+                </div>
+                
+                <!-- Card Payment Form -->
+                <div id="cardForm" class="payment-form">
+                    <div class="form-group">
+                        <label>Card Number</label>
+                        <input type="text" id="cardNumber" placeholder="1234 5678 9012 3456" maxlength="19">
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div class="form-group">
+                            <label>Expiry Date</label>
+                            <input type="text" id="cardExpiry" placeholder="MM/YY" maxlength="5">
+                        </div>
+                        <div class="form-group">
+                            <label>CVV</label>
+                            <input type="password" id="cardCvv" placeholder="***" maxlength="3">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Cardholder Name</label>
+                        <input type="text" id="cardName" placeholder="Name on card">
+                    </div>
+                </div>
+                
+                <!-- UPI Payment Form -->
+                <div id="upiForm" class="payment-form" style="display: none;">
+                    <div class="form-group">
+                        <label>UPI ID</label>
+                        <input type="text" id="upiId" placeholder="yourname@upi">
+                    </div>
+                </div>
+                
+                <!-- Net Banking Form -->
+                <div id="netbankingForm" class="payment-form" style="display: none;">
+                    <div class="form-group">
+                        <label>Select Bank</label>
+                        <select id="bankSelect">
+                            <option value="">Choose your bank</option>
+                            <option value="sbi">State Bank of India</option>
+                            <option value="hdfc">HDFC Bank</option>
+                            <option value="icici">ICICI Bank</option>
+                            <option value="axis">Axis Bank</option>
+                            <option value="kotak">Kotak Mahindra Bank</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div id="alertContainer"></div>
+                
+                <button id="payBtn" class="btn btn-primary" style="width: 100%; margin-top: 1rem;" onclick="processPayment()">
+                    Pay <span id="payAmount">₹0</span>
+                </button>
+                
+                <p style="text-align: center; margin-top: 1rem; color: var(--text-muted); font-size: 0.9rem;">
+                    🔒 This is a demo payment. No real transaction will occur.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Success Modal -->
+    <div id="successModal" class="modal">
+        <div class="modal-content" style="text-align: center;">
+            <div style="font-size: 4rem; margin-bottom: 1rem;">🎉</div>
+            <h2>Booking Confirmed!</h2>
+            <p style="color: var(--text-muted); margin: 1rem 0;">Your tickets have been booked successfully.</p>
+            <div id="ticketDetails" style="background: rgba(255,255,255,0.05); padding: 1rem; border-radius: 8px; margin: 1rem 0; text-align: left;">
+            </div>
+            <button class="btn btn-primary" onclick="window.location.href='/bookings.html'">View My Bookings</button>
+            <button class="btn btn-secondary" style="margin-left: 1rem;" onclick="window.location.href='/'">Back to Home</button>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/js/app.js"></script>
+    <script>
+        // Check auth
+        if (!Auth.isLoggedIn()) {
+            window.location.href = '/login.html';
+        }
+        
+        const urlParams = new URLSearchParams(window.location.search);
+        const bookingId = urlParams.get('booking');
+        let bookingData = null;
+        let selectedPayment = 'card';
+        
+        // Load booking details
+        async function loadBooking() {
+            try {
+                // Try to get from localStorage first (just created)
+                const pendingBooking = localStorage.getItem('pendingBooking');
+                if (pendingBooking) {
+                    bookingData = JSON.parse(pendingBooking);
+                    renderBookingDetails();
+                    return;
+                }
+                
+                // Otherwise fetch from API
+                const response = await api.get(`/bookings/${bookingId}`);
+                bookingData = response;
+                renderBookingDetails();
+            } catch (error) {
+                document.getElementById('bookingDetails').innerHTML = 
+                    `<p class="alert alert-error">${error.message}</p>`;
+            }
+        }
+        
+        function renderBookingDetails() {
+            document.getElementById('bookingDetails').innerHTML = `
+                <p><strong>Booking ID:</strong> ${bookingData.bookingNumber}</p>
+                <p><strong>Seats:</strong> ${bookingData.seats.map(s => s.visibleSeatLabel).join(', ')}</p>
+                <hr style="border-color: var(--border-color); margin: 1rem 0;">
+                <div class="summary-row">
+                    <span>Tickets (${bookingData.seats.length})</span>
+                    <span>${UI.formatCurrency(bookingData.totalAmount)}</span>
+                </div>
+                <div class="summary-row">
+                    <span>Convenience Fee</span>
+                    <span>${UI.formatCurrency(bookingData.convenienceFee)}</span>
+                </div>
+                <div class="summary-row">
+                    <span>GST</span>
+                    <span>${UI.formatCurrency(bookingData.tax)}</span>
+                </div>
+                <div class="summary-row total">
+                    <span>Total</span>
+                    <span>${UI.formatCurrency(bookingData.finalAmount)}</span>
+                </div>
+            `;
+            
+            document.getElementById('payAmount').textContent = UI.formatCurrency(bookingData.finalAmount);
+            document.getElementById('paymentSection').style.display = 'block';
+        }
+        
+        function selectPayment(method) {
+            selectedPayment = method;
+            
+            // Update UI
+            document.querySelectorAll('.payment-method').forEach(el => {
+                el.classList.remove('active');
+                if (el.dataset.method === method) {
+                    el.classList.add('active');
+                }
+            });
+            
+            // Show correct form
+            document.getElementById('cardForm').style.display = method === 'card' ? 'block' : 'none';
+            document.getElementById('upiForm').style.display = method === 'upi' ? 'block' : 'none';
+            document.getElementById('netbankingForm').style.display = method === 'netbanking' ? 'block' : 'none';
+        }
+        
+        async function processPayment() {
+            const alertContainer = document.getElementById('alertContainer');
+            alertContainer.innerHTML = '';
+            
+            // Basic validation
+            if (selectedPayment === 'card') {
+                const cardNumber = document.getElementById('cardNumber').value;
+                const cardExpiry = document.getElementById('cardExpiry').value;
+                const cardCvv = document.getElementById('cardCvv').value;
+                const cardName = document.getElementById('cardName').value;
+                
+                if (!cardNumber || !cardExpiry || !cardCvv || !cardName) {
+                    alertContainer.innerHTML = '<div class="alert alert-error">Please fill all card details</div>';
+                    return;
+                }
+            } else if (selectedPayment === 'upi') {
+                const upiId = document.getElementById('upiId').value;
+                if (!upiId || !upiId.includes('@')) {
+                    alertContainer.innerHTML = '<div class="alert alert-error">Please enter a valid UPI ID</div>';
+                    return;
+                }
+            } else if (selectedPayment === 'netbanking') {
+                const bank = document.getElementById('bankSelect').value;
+                if (!bank) {
+                    alertContainer.innerHTML = '<div class="alert alert-error">Please select a bank</div>';
+                    return;
+                }
+            }
+            
+            // Show processing
+            const payBtn = document.getElementById('payBtn');
+            payBtn.disabled = true;
+            payBtn.innerHTML = '<div class="spinner" style="width: 20px; height: 20px; margin: 0 auto;"></div> Processing...';
+            
+            // Simulate payment processing
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            try {
+                // Confirm booking
+                const response = await api.post(`/bookings/${bookingData.id || bookingId}/confirm`, {
+                    paymentId: 'SAMPLE_PAY_' + Date.now(),
+                    paymentMethod: selectedPayment
+                });
+                
+                // Clear pending booking
+                localStorage.removeItem('pendingBooking');
+                
+                // Show success modal
+                document.getElementById('ticketDetails').innerHTML = `
+                    <p><strong>Booking Number:</strong> ${response.booking.bookingNumber}</p>
+                    <p><strong>Movie:</strong> ${response.booking.show.movie.title}</p>
+                    <p><strong>Theater:</strong> ${response.booking.show.theater.name}</p>
+                    <p><strong>Seats:</strong> ${response.booking.seats.map(s => s.visibleSeatLabel).join(', ')}</p>
+                    <p><strong>Amount Paid:</strong> ${UI.formatCurrency(response.booking.finalAmount)}</p>
+                `;
+                document.getElementById('successModal').classList.add('active');
+                
+            } catch (error) {
+                payBtn.disabled = false;
+                payBtn.innerHTML = `Pay ${UI.formatCurrency(bookingData.finalAmount)}`;
+                alertContainer.innerHTML = `<div class="alert alert-error">${error.message}</div>`;
+            }
+        }
+        
+        // Format card number input
+        document.getElementById('cardNumber')?.addEventListener('input', (e) => {
+            let value = e.target.value.replace(/\s/g, '').replace(/\D/g, '');
+            value = value.match(/.{1,4}/g)?.join(' ') || value;
+            e.target.value = value;
+        });
+        
+        // Format expiry input
+        document.getElementById('cardExpiry')?.addEventListener('input', (e) => {
+            let value = e.target.value.replace(/\D/g, '');
+            if (value.length >= 2) {
+                value = value.slice(0, 2) + '/' + value.slice(2);
+            }
+            e.target.value = value;
+        });
+        
+        // Initialize
+        loadBooking();
+    </script>
+</body>
+</html>

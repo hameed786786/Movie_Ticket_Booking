@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Bookings - MovieHub</title>
+  <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+  <header>
+    <div class="container">
+      <h1>🎬 MovieHub</h1>
+      <nav id="headerNav">
+        <a href="/">Home</a>
+        <a href="/my-bookings.simple.html">My Bookings</a>
+        <a href="#" onclick="Auth.logout(); return false;">Logout</a>
+      </nav>
+    </div>
+  </header>
+
+  <section class="bookings-list">
+    <div class="container">
+      <h2>My Bookings</h2>
+      <div class="loading">Loading bookings...</div>
+      <div id="bookingsList"></div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="container">
+      <p>&copy; 2025 MovieHub. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <script src="/js/app.simple.js"></script>
+  <script>
+    // Check if logged in
+    if (!Auth.isLoggedIn()) {
+      window.location.href = '/login.simple.html';
+    }
+
+    const user = Auth.getUser();
+    document.querySelector('#headerNav a:last-child').textContent = `Logout (${user.name})`;
+
+    async function loadBookings() {
+      try {
+        const { bookings } = await API.get('/bookings/my-bookings');
+        const loading = document.querySelector('.loading');
+        const bookingsList = document.getElementById('bookingsList');
+
+        loading.style.display = 'none';
+
+        if (bookings.length === 0) {
+          bookingsList.innerHTML = '<p class="text-center">No bookings yet. <a href="/">Browse movies</a> to book tickets!</p>';
+          return;
+        }
+
+        bookingsList.innerHTML = bookings.map(booking => `
+          <div class="booking-card">
+            <h3>${booking.showId.movieId.title}</h3>
+            <div class="booking-details">
+              <div class="booking-detail">
+                <strong>Theatre:</strong><br>${booking.showId.theatreId.name}<br>
+                ${booking.showId.theatreId.location}
+              </div>
+              <div class="booking-detail">
+                <strong>Showtime:</strong><br>${formatDate(booking.showId.showTime)}
+              </div>
+              <div class="booking-detail">
+                <strong>Seats:</strong><br>${booking.seats.join(', ')}
+              </div>
+              <div class="booking-detail">
+                <strong>Total Price:</strong><br>${formatCurrency(booking.totalPrice)}
+              </div>
+              <div class="booking-detail">
+                <strong>Status:</strong><br>
+                <span class="status-${booking.status.toLowerCase()}">${booking.status}</span>
+              </div>
+              <div class="booking-detail">
+                <strong>Booked On:</strong><br>${formatDate(booking.bookedAt)}
+              </div>
+            </div>
+            ${booking.status === 'CONFIRMED' ? `
+              <button class="btn" onclick="cancelBooking('${booking._id}')" style="background: #e74c3c;">
+                Cancel Booking
+              </button>
+            ` : ''}
+          </div>
+        `).join('');
+      } catch (error) {
+        document.querySelector('.loading').textContent = 'Failed to load bookings';
+      }
+    }
+
+    async function cancelBooking(bookingId) {
+      if (!confirm('Are you sure you want to cancel this booking?')) {
+        return;
+      }
+
+      try {
+        await API.post(`/bookings/${bookingId}/cancel`);
+        alert('Booking cancelled successfully');
+        loadBookings(); // Reload bookings
+      } catch (error) {
+        alert(error.message);
+      }
+    }
+
+    loadBookings();
+  </script>
+</body>
+</html>

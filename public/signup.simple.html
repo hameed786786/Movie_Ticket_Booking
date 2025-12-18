@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign Up - MovieHub</title>
+  <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+  <div class="auth-container">
+    <div class="auth-card">
+      <h2>Create Account</h2>
+      <div id="alertContainer"></div>
+      <form id="signupForm">
+        <div class="form-group">
+          <label>Full Name</label>
+          <input type="text" id="name" required>
+        </div>
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" id="email" required>
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="password" minlength="6" required>
+        </div>
+        <div class="form-group">
+          <label>Confirm Password</label>
+          <input type="password" id="confirmPassword" required>
+        </div>
+        <button type="submit" class="btn" style="width: 100%;">Sign Up</button>
+      </form>
+      <div class="auth-footer">
+        <p>Already have an account? <a href="/login.simple.html">Login</a></p>
+        <p class="mt-1"><a href="/">← Back to Home</a></p>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.simple.js"></script>
+  <script>
+    // Redirect if already logged in
+    if (Auth.isLoggedIn()) {
+      window.location.href = '/';
+    }
+
+    document.getElementById('signupForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const name = document.getElementById('name').value;
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      const confirmPassword = document.getElementById('confirmPassword').value;
+      const alertContainer = document.getElementById('alertContainer');
+      const submitBtn = e.target.querySelector('button');
+
+      alertContainer.innerHTML = '';
+
+      if (password !== confirmPassword) {
+        alertContainer.innerHTML = '<div class="alert alert-error">Passwords do not match</div>';
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Creating account...';
+
+      try {
+        await API.post('/auth/signup', { name, email, password });
+        
+        alertContainer.innerHTML = '<div class="alert alert-success">Account created! Redirecting to login...</div>';
+        
+        setTimeout(() => {
+          window.location.href = '/login.simple.html';
+        }, 2000);
+      } catch (error) {
+        alertContainer.innerHTML = `<div class="alert alert-error">${error.message}</div>`;
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Sign Up';
+      }
+    });
+  </script>
+</body>
+</html>

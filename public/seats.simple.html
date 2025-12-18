@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Select Seats - MovieHub</title>
+  <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+  <header>
+    <div class="container">
+      <h1>🎬 MovieHub</h1>
+      <nav id="headerNav">
+        <a href="/">Home</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="container">
+    <div class="seat-selection">
+      <h2 id="showTitle">Select Your Seats</h2>
+      
+      <div class="screen">SCREEN</div>
+
+      <div class="seat-legend">
+        <div class="legend-item">
+          <div class="legend-box" style="background: #4caf50;"></div>
+          <span>Available</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-box" style="background: #667eea;"></div>
+          <span>Selected</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-box" style="background: #e74c3c;"></div>
+          <span>Booked</span>
+        </div>
+      </div>
+
+      <div class="loading">Loading seats...</div>
+      <div class="seats-grid" id="seatsGrid"></div>
+
+      <div class="booking-summary" id="bookingSummary" style="display: none;">
+        <h3>Booking Summary</h3>
+        <p><strong>Movie:</strong> <span id="summaryMovie"></span></p>
+        <p><strong>Theatre:</strong> <span id="summaryTheatre"></span></p>
+        <p><strong>Showtime:</strong> <span id="summaryTime"></span></p>
+        <p><strong>Selected Seats:</strong> <span id="summarySeats"></span></p>
+        <p class="total-price">Total: <span id="summaryPrice">₹0</span></p>
+        <button class="btn" onclick="bookSeats()" style="width: 100%;">Confirm Booking</button>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <div class="container">
+      <p>&copy; 2025 MovieHub. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <script src="/js/app.simple.js"></script>
+  <script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const showId = urlParams.get('show');
+    let selectedSeats = [];
+    let showData = null;
+
+    if (!showId) {
+      window.location.href = '/';
+    }
+
+    // Check if logged in
+    if (!Auth.isLoggedIn()) {
+      alert('Please login to book tickets');
+      window.location.href = '/login.simple.html';
+    }
+
+    // Update header
+    const nav = document.getElementById('headerNav');
+    const user = Auth.getUser();
+    nav.innerHTML = `
+      <a href="/">Home</a>
+      <a href="/my-bookings.simple.html">My Bookings</a>
+      <a href="#" onclick="Auth.logout(); return false;">Logout (${user.name})</a>
+    `;
+
+    async function loadSeats() {
+      try {
+        const data = await API.get(`/shows/${showId}`);
+        showData = data.show;
+        
+        const loading = document.querySelector('.loading');
+        const seatsGrid = document.getElementById('seatsGrid');
+
+        loading.style.display = 'none';
+
+        // Update title
+        document.getElementById('showTitle').textContent = 
+          `${showData.movieId.title} - ${showData.theatreId.name}`;
+
+        // Generate seats
+        const seats = [];
+        for (let i = 1; i <= showData.totalSeats; i++) {
+          const isBooked = showData.bookedSeats.includes(i);
+          seats.push(`
+            <div class="seat ${isBooked ? 'booked' : ''}" 
+                 data-seat="${i}"
+                 ${!isBooked ? `onclick="toggleSeat(${i})"` : ''}>
+              ${i}
+            </div>
+          `);
+        }
+
+        seatsGrid.innerHTML = seats.join('');
+      } catch (error) {
+        document.querySelector('.loading').textContent = 'Failed to load seats';
+      }
+    }
+
+    function toggleSeat(seatNumber) {
+      const index = selectedSeats.indexOf(seatNumber);
+      const seatElement = document.querySelector(`[data-seat="${seatNumber}"]`);
+
+      if (index > -1) {
+        selectedSeats.splice(index, 1);
+        seatElement.classList.remove('selected');
+      } else {
+        selectedSeats.push(seatNumber);
+        seatElement.classList.add('selected');
+      }
+
+      updateSummary();
+    }
+
+    function updateSummary() {
+      const summary = document.getElementById('bookingSummary');
+
+      if (selectedSeats.length === 0) {
+        summary.style.display = 'none';
+        return;
+      }
+
+      summary.style.display = 'block';
+      document.getElementById('summaryMovie').textContent = showData.movieId.title;
+      document.getElementById('summaryTheatre').textContent = showData.theatreId.name;
+      document.getElementById('summaryTime').textContent = formatDate(showData.showTime);
+      document.getElementById('summarySeats').textContent = selectedSeats.sort((a, b) => a - b).join(', ');
+      document.getElementById('summaryPrice').textContent = formatCurrency(selectedSeats.length * showData.price);
+    }
+
+    async function bookSeats() {
+      if (selectedSeats.length === 0) {
+        alert('Please select at least one seat');
+        return;
+      }
+
+      try {
+        const data = await API.post(`/shows/${showId}/book`, { seats: selectedSeats });
+        
+        alert(`Booking confirmed! Total: ${formatCurrency(data.booking.totalPrice)}`);
+        window.location.href = '/my-bookings.simple.html';
+      } catch (error) {
+        alert(error.message);
+        // Reload to refresh seat availability
+        location.reload();
+      }
+    }
+
+    loadSeats();
+  </script>
+</body>
+</html>

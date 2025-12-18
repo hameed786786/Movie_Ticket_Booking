@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MovieHub - Book Your Tickets</title>
+  <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+  <header>
+    <div class="container">
+      <h1>🎬 MovieHub</h1>
+      <nav id="headerNav">
+        <a href="/">Home</a>
+        <a href="/login.simple.html">Login</a>
+        <a href="/signup.simple.html">Sign Up</a>
+      </nav>
+    </div>
+  </header>
+
+  <section class="hero">
+    <div class="container">
+      <h2>Book Your Movie Tickets</h2>
+      <p>Experience the magic of cinema. Book tickets for the latest movies at theaters near you.</p>
+      <a href="#movies" class="btn">Browse Movies</a>
+    </div>
+  </section>
+
+  <section class="movies-section" id="movies">
+    <div class="container">
+      <h2>Now Showing</h2>
+      <div class="loading">Loading movies...</div>
+      <div class="movies-grid" id="moviesGrid"></div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="container">
+      <p>&copy; 2025 MovieHub. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <script src="/js/app.simple.js"></script>
+  <script>
+    // Update header based on auth status
+    function updateHeader() {
+      const nav = document.getElementById('headerNav');
+      const user = Auth.getUser();
+
+      if (user) {
+        nav.innerHTML = `
+          <a href="/">Home</a>
+          <a href="/my-bookings.simple.html">My Bookings</a>
+          <a href="#" onclick="Auth.logout(); return false;">Logout (${user.name})</a>
+        `;
+      }
+    }
+
+    // Load and display movies
+    async function loadMovies() {
+      try {
+        const { movies } = await API.get('/movies');
+        const grid = document.getElementById('moviesGrid');
+        const loading = document.querySelector('.loading');
+
+        loading.style.display = 'none';
+
+        if (movies.length === 0) {
+          grid.innerHTML = '<p class="text-center">No movies available</p>';
+          return;
+        }
+
+        grid.innerHTML = movies.map(movie => `
+          <div class="movie-card" onclick="window.location.href='/showtimes.simple.html?movie=${movie._id}'">
+            <img src="${movie.poster || '/images/default-poster.svg'}" alt="${movie.title}" onerror="this.src='/images/default-poster.svg'">
+            <div class="movie-card-content">
+              <h3>${movie.title}</h3>
+              <p>${movie.duration} min | ${movie.language}</p>
+              <span class="genre">${movie.genre}</span>
+            </div>
+          </div>
+        `).join('');
+      } catch (error) {
+        document.querySelector('.loading').textContent = 'Failed to load movies';
+      }
+    }
+
+    updateHeader();
+    loadMovies();
+  </script>
+</body>
+</html>
