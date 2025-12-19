@@ -3,11 +3,19 @@ const router = express.Router();
 const Movie = require('../models/Movie');
 const Show = require('../models/Show');
 const { auth, theaterAuth, optionalAuth } = require('../middleware/auth');
+const cache = require('../utils/cache');
 
 // Get all movies (public)
 router.get('/', optionalAuth, async (req, res) => {
   try {
     const { genre, language, search, nowShowing } = req.query;
+    
+    const cacheKey = `movies_${genre || 'all'}_${language || 'all'}_${search || 'none'}_${nowShowing || 'false'}`;
+    const cachedMovies = cache.getMovies(cacheKey);
+    
+    if (cachedMovies) {
+      return res.json({ success: true, movies: cachedMovies, cached: true });
+    }
     
     let query = { isActive: true };
     
@@ -34,6 +42,8 @@ router.get('/', optionalAuth, async (req, res) => {
       .sort({ releaseDate: -1 })
       .limit(50);
 
+    cache.setMovies(cacheKey, movies);
+
     res.json({ success: true, movies });
   } catch (error) {
     console.error('Error fetching movies:', error);
@@ -44,11 +54,19 @@ router.get('/', optionalAuth, async (req, res) => {
 // Get movie by ID (public)
 router.get('/:id', optionalAuth, async (req, res) => {
   try {
+    const cachedMovie = cache.getMovie(req.params.id);
+    
+    if (cachedMovie) {
+      return res.json({ success: true, movie: cachedMovie, cached: true });
+    }
+    
     const movie = await Movie.findById(req.params.id);
     
     if (!movie) {
       return res.status(404).json({ success: false, message: 'Movie not found' });
     }
+
+    cache.setMovie(req.params.id, movie);
 
     res.json({ success: true, movie });
   } catch (error) {
@@ -62,6 +80,13 @@ router.get('/:id/shows', optionalAuth, async (req, res) => {
   try {
     const { date } = req.query;
     
+    const cacheKey = `shows_${req.params.id}_${date || 'today'}`;
+    const cachedShows = cache.getShows(cacheKey);
+    
+    if (cachedShows) {
+      return res.json({ success: true, shows: cachedShows, cached: true });
+    }
+    
     let dateQuery = {};
     if (date) {
       const startDate = new Date(date);
@@ -70,7 +95,6 @@ router.get('/:id/shows', optionalAuth, async (req, res) => {
       endDate.setHours(23, 59, 59, 999);
       dateQuery = { showTime: { $gte: startDate, $lte: endDate } };
     } else {
-      // Default to today and future shows
       dateQuery = { showTime: { $gte: new Date() } };
     }
 
@@ -95,7 +119,10 @@ router.get('/:id/shows', optionalAuth, async (req, res) => {
       return acc;
     }, {});
 
-    res.json({ success: true, shows: Object.values(groupedShows) });
+    const result = Object.values(groupedShows);
+    cache.setShows(cacheKey, result);
+
+    res.json({ success: true, shows: result });
   } catch (error) {
     console.error('Error fetching shows:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch shows' });

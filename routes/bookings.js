@@ -4,6 +4,7 @@ const Booking = require('../models/Booking');
 const Show = require('../models/Show');
 const SeatLock = require('../models/SeatLock');
 const { auth } = require('../middleware/auth');
+const cache = require('../utils/cache');
 
 // Get user's bookings
 router.get('/', auth, async (req, res) => {
@@ -136,6 +137,8 @@ router.post('/', async (req, res) => {
     show.availableSeats = Math.max(0, show.availableSeats - seats.length);
     await show.save();
 
+    cache.invalidateShows();
+
     console.log('✅ Booking created:', booking._id);
     console.log('🎫 Updated bookedSeats count:', show.bookedSeats.length);
     console.log('💺 Available seats remaining:', show.availableSeats);
@@ -203,7 +206,8 @@ router.post('/:id/confirm', auth, async (req, res) => {
     show.availableSeats -= booking.seats.length;
     await show.save();
 
-    // Remove seat locks
+    cache.invalidateShows();
+
     await SeatLock.deleteMany({
       show: booking.show,
       visibleSeatLabel: { $in: booking.seats.map(s => s.visibleSeatLabel) }
@@ -262,6 +266,8 @@ router.post('/:id/cancel', async (req, res) => {
         show.bookedSeats = show.bookedSeats.filter(s => !seatLabels.includes(s.visibleSeatLabel));
         show.availableSeats += booking.seats.length;
         await show.save();
+        
+        cache.invalidateShows();
       }
     }
 
